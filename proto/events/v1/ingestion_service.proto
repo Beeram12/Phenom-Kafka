@@ -1,0 +1,50 @@
+// gRPC ingestion API. Same evolution rules as events.proto.
+syntax = "proto3";
+
+package events.v1;
+
+import "events/v1/events.proto";
+
+service EventIngestionService {
+  // Publishes a batch of events. Each event gets its own EventResult.
+  // ACCEPTED means the event is in a COMMITTED Kafka transaction.
+  rpc PublishEvents(PublishEventsRequest) returns (PublishEventsResponse);
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+message PublishEventsRequest {
+  string request_id = 1;              // client idempotency key for the request (used for tracing)
+  repeated EventEnvelope events = 2;
+}
+
+enum EventStatus {
+  EVENT_STATUS_UNSPECIFIED = 0;
+  ACCEPTED = 1;          // committed to Kafka
+  DUPLICATE = 2;         // event_id already committed earlier; not published again
+  REJECTED_INVALID = 3;  // failed validation; copied to the DLQ
+  SENT_TO_DLQ = 4;       // could not be published; written to the DLQ
+  FAILED = 5;            // not published and not in the DLQ (or outcome unknown); safe to retry
+}
+
+message EventResult {
+  string event_id = 1;
+  EventStatus status = 2;
+  string error_message = 3;
+}
+
+message PublishEventsResponse {
+  string request_id = 1;
+  repeated EventResult results = 2;
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  enum ServingStatus {
+    SERVING_STATUS_UNSPECIFIED = 0;
+    SERVING = 1;
+    NOT_SERVING = 2;
+  }
+  ServingStatus status = 1;
+  string instance_id = 2;
+}

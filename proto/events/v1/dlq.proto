@@ -1,0 +1,29 @@
+// Dead-letter record written to food.events.dlq.
+// Same evolution rules as events.proto: additive changes only, never reuse
+// field numbers, breaking changes go to a new package + topic.
+syntax = "proto3";
+
+package events.v1;
+
+import "google/protobuf/timestamp.proto";
+
+enum FailedStage {
+  FAILED_STAGE_UNSPECIFIED = 0;
+  VALIDATION = 1;
+  SERIALIZATION = 2;
+  PUBLISH = 3;
+}
+
+message DlqRecord {
+  string original_topic = 1;       // empty when the event could not be routed
+  bytes original_payload = 2;      // serialized EventEnvelope as received
+  string event_id = 3;
+  string tenant_id = 4;
+  string error_class = 5;          // e.g. "MessageSizeTooLargeError", "ValidationError"
+  string error_message = 6;
+  FailedStage failed_stage = 7;
+  int32 attempt_count = 8;
+  google.protobuf.Timestamp first_failed_at = 9;
+  google.protobuf.Timestamp last_failed_at = 10;
+  string event_type = 11;
+}

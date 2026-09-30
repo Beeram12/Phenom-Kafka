@@ -1,0 +1,73 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "food-event-ingestion"
+version = "0.1.0"
+description = "gRPC -> Kafka event ingestion service with transactional, idempotent, batched publishing."
+requires-python = ">=3.11"
+dependencies = [
+    "grpcio>=1.66",
+    "protobuf>=5.28",
+    "aiokafka[lz4]>=0.11",
+    "redis>=5.0",
+    "pydantic>=2.8",
+    "pydantic-settings>=2.4",
+    "structlog>=24.4",
+    "prometheus-client>=0.20",
+]
+
+[project.optional-dependencies]
+dev = [
+    "grpcio-tools>=1.66",
+    "mypy-protobuf>=3.6",
+    "faker>=28.0",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "fakeredis[lua]>=2.24",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "types-protobuf",
+    "grpc-stubs",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ingestion"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "scripts", "tests"]
+extend-exclude = ["src/ingestion/generated"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "RUF", "ASYNC", "PT", "RET", "TID"]
+ignore = ["RUF001"]
+
+[tool.ruff.lint.per-file-ignores]
+# gRPC servicer method names are dictated by the generated base class.
+"src/ingestion/api/ingestion_servicer.py" = ["N802"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+mypy_path = "src"
+explicit_package_bases = true
+files = ["src/ingestion", "scripts", "tests"]
+exclude = ["src/ingestion/generated/.*_pb2(_grpc)?\\.py$"]
+
+[[tool.mypy.overrides]]
+module = ["ingestion.generated.*"]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = ["aiokafka", "aiokafka.*", "grpc_tools", "grpc_tools.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+markers = ["integration: requires the docker-compose Kafka + Redis stack (make up)"]
+addopts = "-ra"

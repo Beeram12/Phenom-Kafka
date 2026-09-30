@@ -1,0 +1,125 @@
+// Food-ordering analytics event contract, version 1.
+//
+// These messages are used BOTH as the gRPC request payload and as the Kafka
+// record value (serialized EventEnvelope bytes).
+//
+// SCHEMA EVOLUTION RULES (enforced by review, read before editing):
+//   1. Only ADD fields, each with a brand-new field number.
+//   2. Never reuse or renumber an existing field number. When a field is
+//      removed, mark its number AND name as `reserved` so it can never be
+//      reused by accident, e.g.:
+//          reserved 7;
+//          reserved "legacy_field";
+//   3. Never change the type or semantics of an existing field.
+//   4. Breaking changes go to a NEW package (events.v2) published to a NEW
+//      topic (e.g. food.orders.v2); v1 and v2 run side by side until all
+//      consumers have migrated.
+//   5. Adding a new event type = add a payload message + a new `oneof` case
+//      here, and ONE entry in ingestion/domain/routing.py (ROUTING_REGISTRY).
+//      Bump EventEnvelope.schema_version only for additive changes that
+//      consumers need to detect.
+syntax = "proto3";
+
+package events.v1;
+
+import "google/protobuf/timestamp.proto";
+
+enum EventSource {
+  EVENT_SOURCE_UNSPECIFIED = 0;
+  WEB = 1;
+  MOBILE = 2;
+  BACKEND = 3;
+  WEBHOOK = 4;
+}
+
+message EventContext {
+  string timezone = 1;     // IANA name, e.g. "Asia/Kolkata"
+  string city = 2;
+  string platform = 3;     // e.g. "android", "ios", "web"
+  string app_version = 4;
+}
+
+message OrderItem {
+  string item_id = 1;
+  string name = 2;
+  string category = 3;
+  double unit_price = 4;
+  int32 quantity = 5;
+}
+
+message OrderPlaced {
+  string order_id = 1;
+  string restaurant_id = 2;
+  repeated OrderItem items = 3;
+  double subtotal = 4;
+  double discount = 5;
+  double total = 6;
+  string currency = 7;     // ISO-4217, e.g. "INR"
+  string order_type = 8;   // e.g. "delivery", "takeaway", "dine_in"
+}
+
+message ItemRating {
+  string item_id = 1;
+  int32 rating = 2;        // 1-5
+}
+
+message RatingSubmitted {
+  string order_id = 1;
+  string restaurant_id = 2;
+  int32 overall_rating = 3;  // 1-5
+  repeated ItemRating item_ratings = 4;
+  repeated string tags = 5;
+  string comment = 6;
+}
+
+message RatingPromptShown {
+  string order_id = 1;
+}
+
+message PriceFilterApplied {
+  double min_price = 1;
+  double max_price = 2;
+  string category = 3;
+}
+
+message CartItemAdded {
+  string item_id = 1;
+  double unit_price = 2;
+  int32 quantity = 3;
+  string restaurant_id = 4;
+}
+
+message ItemViewed {
+  string item_id = 1;
+  string restaurant_id = 2;
+  double unit_price = 3;
+}
+
+message SessionStarted {
+  string entry_point = 1;  // e.g. "home", "push_notification", "deeplink"
+  string referrer = 2;
+}
+
+message EventEnvelope {
+  string event_id = 1;                          // UUID, client-generated, idempotency key
+  string event_type = 2;                        // e.g. "order_placed"; must match the payload case
+  int32 schema_version = 3;
+  string tenant_id = 4;                         // OVERWRITTEN by the server from the API key
+  EventSource source = 5;
+  string user_id = 6;
+  string anonymous_id = 7;
+  string session_id = 8;
+  google.protobuf.Timestamp event_time = 9;     // when it happened on the client
+  google.protobuf.Timestamp received_time = 10; // set by the server; client value ignored
+  EventContext context = 11;
+
+  oneof payload {
+    OrderPlaced order_placed = 20;
+    RatingSubmitted rating_submitted = 21;
+    RatingPromptShown rating_prompt_shown = 22;
+    PriceFilterApplied price_filter_applied = 23;
+    CartItemAdded cart_item_added = 24;
+    ItemViewed item_viewed = 25;
+    SessionStarted session_started = 26;
+  }
+}
